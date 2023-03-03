@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NodaTime;
 using QuantConnect.Data;
 using QuantConnect.Data.Auxiliary;
 using QuantConnect.Data.Market;
@@ -74,7 +75,42 @@ namespace QuantConnect.Orders.Fills
                 return fill;
             }
 
+            decimal GetFillPrice(DateTime endTimeUtc, decimal price)
+            {
+                if (endTimeUtc <= order.Time) return 0;
+                
+                switch (order.Direction)
+                {
+                    case OrderDirection.Buy:
+                        if (price <= order.TriggerPrice || order.TriggerTouched)
+                        {
+                            order.TriggerTouched = true;
+                            if (price < order.LimitPrice)
+                            {
+                                return order.LimitPrice;
+                            }
+                        }
+
+                        break;
+
+                    case OrderDirection.Sell:
+                        if (price >= order.TriggerPrice || order.TriggerTouched)
+                        {
+                            order.TriggerTouched = true;
+                            if (price > order.LimitPrice)
+                            {
+                                return order.LimitPrice;
+                            }
+                        }
+
+                        break;
+                }
+                
+                return 0;
+            }
+
             // Get the range of prices in the last bar:
+            var tradeOpen = 0m;
             var tradeHigh = 0m;
             var tradeLow = 0m;
             var endTimeUtc = DateTime.MinValue;
@@ -83,21 +119,38 @@ namespace QuantConnect.Orders.Fills
 
             if (subscribedTypes.Contains(typeof(Tick)))
             {
-                var trades = asset.Cache.GetAll<Tick>().Where(x => x.TickType == TickType.Trade && x.Price > 0);
+                var trades = asset.Cache.GetAll<Tick>().Where(x => x.TickType == TickType.Trade && x.Price > 0).ToList();
 
-                foreach (var trade in trades)
+                for (var i = 0; i < trades.Count; i++)
                 {
+                    var trade = trades[i];
+                    endTimeUtc = trade.EndTime.ConvertToUtc(asset.Exchange.TimeZone);
+                    var fillPrice = GetFillPrice(endTimeUtc, trade.Price);
+                    if (order.TriggerTouched)
+                    {
+                        ;
+                    }
+
+                    if (fillPrice > 0)
+                    {
+                        fill.FillPrice = i == 0 ? trade.Price : fillPrice;
+                        fill.Status = OrderStatus.Filled;
+                        fill.FillQuantity = order.Quantity;
+                        return fill;
+                    }
+
+                    tradeOpen = tradeOpen == 0 ? trade.Price : tradeOpen;
                     tradeHigh = Math.Max(tradeHigh, trade.Price);
                     tradeLow = tradeLow == 0 ? trade.Price : Math.Min(tradeLow, trade.Price);
-                    endTimeUtc = trade.EndTime.ConvertToUtc(asset.Exchange.TimeZone);
                 }
             }
-            else if (subscribedTypes.Contains(typeof(TradeBar)))
+            if ( subscribedTypes.Contains(typeof(TradeBar)))
             {
                 var tradeBar = asset.Cache.GetData<TradeBar>();
 
                 if (tradeBar != null)
                 {
+                    tradeOpen = tradeBar.Open;
                     tradeHigh = tradeBar.High;
                     tradeLow = tradeBar.Low;
                     endTimeUtc = tradeBar.EndTime.ConvertToUtc(asset.Exchange.TimeZone);
@@ -117,14 +170,19 @@ namespace QuantConnect.Orders.Fills
                     // If price above the trigger price, starts to behave as a limit fill
                     if (tradeLow <= order.TriggerPrice || order.TriggerTouched)
                     {
-                        // If it is the first trigger event, use the closing price as the low
-                        // since we don't know if the trigger happened before the limit
-                        if (!order.TriggerTouched)
-                        {
-                            tradeLow = GetBestEffortAskPrice(asset, order.Time, out fillMessage);
-                        }
-
                         order.TriggerTouched = true;
+
+                        // If we place the order below the trigger and limit,
+                        // it behaves as a market using the open as current price
+                        if (tradeOpen <= order.TriggerPrice && tradeOpen < order.LimitPrice)
+                        {
+                            fill.FillPrice = tradeOpen + asset.SlippageModel.GetSlippageApproximation(asset, order);
+
+                            fill.Message = fillMessage;
+                            fill.Status = OrderStatus.Filled;
+                            fill.FillQuantity = order.Quantity;
+                            return fill;
+                        }
 
                         if (tradeLow < order.LimitPrice)
                         {
@@ -141,14 +199,19 @@ namespace QuantConnect.Orders.Fills
                     // If price below the trigger price, starts to behave as a limit fill
                     if (tradeHigh >= order.TriggerPrice || order.TriggerTouched)
                     {
-                        // If it is the first trigger event, use the closing price as the high
-                        // since we don't know if the trigger happened before the limit
-                        if (!order.TriggerTouched)
-                        {
-                            tradeHigh = GetBestEffortBidPrice(asset, order.Time, out fillMessage);
-                        }
-
                         order.TriggerTouched = true;
+
+                        // If we place the order below the trigger and limit,
+                        // it behaves as a market using the open as current price
+                        if (tradeOpen >= order.TriggerPrice && tradeOpen > order.LimitPrice)
+                        {
+                            fill.FillPrice = tradeOpen - asset.SlippageModel.GetSlippageApproximation(asset, order);
+
+                            fill.Message = fillMessage;
+                            fill.Status = OrderStatus.Filled;
+                            fill.FillQuantity = order.Quantity;
+                            return fill;
+                        }
 
                         if (tradeHigh > order.LimitPrice)
                         {
@@ -393,7 +456,8 @@ namespace QuantConnect.Orders.Fills
                     endTimeUtc = trade.EndTime.ConvertToUtc(asset.Exchange.TimeZone);
                 }
             }
-            else if (subscribedTypes.Contains(typeof(TradeBar)))
+            
+            if (endTimeUtc <= order.Time && subscribedTypes.Contains(typeof(TradeBar)))
             {
                 var tradeBar = asset.Cache.GetData<TradeBar>();
 

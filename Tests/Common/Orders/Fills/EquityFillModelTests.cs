@@ -1243,7 +1243,7 @@ namespace QuantConnect.Tests.Common.Orders.Fills
 
         private FillModelParameters GetFillModelParameters(Symbol symbol, Order order)
         {
-            var configTradeBar = CreateTradeBarConfig(Symbols.SPY);
+            var configTradeBar = CreateTradeBarConfig(symbol);
             var configQuoteBar = new SubscriptionDataConfig(configTradeBar, typeof(QuoteBar));
             var configProvider = new MockSubscriptionDataConfigProvider(configQuoteBar);
             configProvider.SubscriptionDataConfigs.Add(configTradeBar);

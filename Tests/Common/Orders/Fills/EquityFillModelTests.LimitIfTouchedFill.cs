@@ -14,7 +14,9 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using Fasterflect;
 using NUnit.Framework;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
@@ -576,5 +578,250 @@ namespace QuantConnect.Tests.Common.Orders.Fills
             Assert.AreEqual(OrderStatus.Filled, fill.Status);
             Assert.AreEqual(0, fill.OrderFee.Value.Amount);
         }
+
+        [TestCase(-100, 291.45, 291.50, 291.40, 291.50)]
+        [TestCase(-100, 291.50, 291.45, 291.40, 291.45)]
+        [TestCase(-100, 291.45, 291.50, 291.475, 291.50)]
+        [TestCase(-100, 291.50, 291.45, 291.475, 291.45)]
+        [TestCase(-100, 291.45, 291.50, 291.6, 291.6)]
+        [TestCase(-100, 291.50, 291.45, 291.6, 291.6)]
+        [TestCase(100, 291.55, 291.50, 291.40, 291.4)]
+        [TestCase(100, 291.50, 291.55, 291.40, 291.4)]
+        [TestCase(100, 291.55, 291.50, 291.525, 0)]
+        [TestCase(100, 291.50, 291.55, 291.525, 0)]
+        [TestCase(100, 291.55, 291.50, 291.6, 0)]
+        [TestCase(100, 291.50, 291.55, 291.6, 0)]
+        public void LimitIfTouchedLinearBullMarket(decimal orderQuantity, decimal triggerPrice, decimal limitPrice, decimal open, decimal excepted)
+        {
+            var fillModel = new EquityFillModel();
+            var time = new DateTime(2018, 9, 24, 9, 30, 0);
+            var timeKeeper = new TimeKeeper(time.ConvertToUtc(TimeZones.NewYork), TimeZones.NewYork);
+
+            var order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            var configTradeBar = CreateTradeBarConfig(Symbols.SPY);
+            var configProvider = new MockSubscriptionDataConfigProvider(CreateTickConfig(Symbols.SPY));
+            configProvider.SubscriptionDataConfigs.Add(configTradeBar);
+
+            var parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            var equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var trades = Enumerable.Range(0, 20)
+                .Select(x => new Tick
+                {
+                    TickType = TickType.Trade,
+                    Time = time.AddMilliseconds(x + 100),
+                    Value = x / 100m + open
+                }).ToList();
+
+            equity.Update(trades, typeof(Tick));
+            
+            var fill = fillModel.Fill(parameters).Single();
+            Assert.AreEqual(excepted, fill.FillPrice);
+
+            // TradeBar Play
+            order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var tradeBar = new TradeBar(time.AddMinutes(1), equity.Symbol, open, open, open, open, 100);
+            foreach (var trade in trades)
+            {
+                tradeBar.UpdateTrade(trade.LastPrice, trade.Quantity);
+            }
+            equity.SetMarketPrice(tradeBar);
+
+            fill = fillModel.LimitIfTouchedFill(equity, order);
+            Assert.AreEqual(excepted, fill.FillPrice);
+        }
+
+        [TestCase(-100, 291.45, 291.50, 291.6, 291.6)]
+        [TestCase(-100, 291.50, 291.45, 291.6, 291.6)]
+        [TestCase(-100, 291.45, 291.50, 291.475, 0)]
+        [TestCase(-100, 291.50, 291.45, 291.475, 0)]
+        [TestCase(-100, 291.45, 291.50, 291.4, 0)]
+        [TestCase(-100, 291.50, 291.45, 291.4, 0)]
+        [TestCase(100, 291.55, 291.50, 291.6, 291.5)]
+        [TestCase(100, 291.50, 291.55, 291.6, 291.55)]
+        [TestCase(100, 291.55, 291.50, 291.525, 291.5)]
+        [TestCase(100, 291.50, 291.55, 291.525, 291.55)]
+        [TestCase(100, 291.55, 291.50, 291.4, 291.4)]
+        [TestCase(100, 291.50, 291.55, 291.4, 291.4)]
+        public void LimitIfTouchedLinearBearMarket(decimal orderQuantity, decimal triggerPrice, decimal limitPrice, decimal open, decimal excepted)
+        {
+            var fillModel = new EquityFillModel();
+            var time = new DateTime(2018, 9, 24, 9, 30, 0);
+            var timeKeeper = new TimeKeeper(time.ConvertToUtc(TimeZones.NewYork), TimeZones.NewYork);
+
+            var order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            var configTradeBar = CreateTradeBarConfig(Symbols.SPY);
+            var configProvider = new MockSubscriptionDataConfigProvider(CreateTickConfig(Symbols.SPY));
+            configProvider.SubscriptionDataConfigs.Add(configTradeBar);
+
+            var parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            var equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var trades = Enumerable.Range(0,20)
+                .Select(x => new Tick
+                {
+                    TickType = TickType.Trade,
+                    Time = time.AddMilliseconds(x + 100),
+                    Value = (20 - x) / 100m + open - 0.2m
+                }).ToList();
+
+            equity.Update(trades, typeof(Tick));
+
+            var fill = fillModel.Fill(parameters).Single();
+            Assert.AreEqual(excepted, fill.FillPrice);
+
+            // TradeBar Play
+            order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var tradeBar = new TradeBar(time.AddMinutes(1), equity.Symbol, open, open, open, open, 100);
+            foreach (var trade in trades)
+            {
+                tradeBar.UpdateTrade(trade.LastPrice, trade.Quantity);
+            }
+            equity.SetMarketPrice(tradeBar);
+
+            fill = fillModel.LimitIfTouchedFill(equity, order);
+            Assert.AreEqual(excepted, fill.FillPrice);
+        }
+
+        [TestCase(100, 291.50, 291.55, 291.4, 0.2, 291.4)]
+        [TestCase(100, 291.50, 291.55, 291.6, 0.2, 291.55)]
+        [TestCase(100, 291.50, 291.55, 291.525, 0.2, 291.55)]
+        [TestCase(100, 291.55, 291.5, 291.4, 0.2, 291.4)]
+        [TestCase(100, 291.55, 291.5, 291.6, 0.2, 291.5)]
+        [TestCase(100, 291.55, 291.5, 291.525, 0.2, 291.5)]
+        public void LimitIfTouchedBullZigZagHighBeforeLow(decimal orderQuantity, decimal triggerPrice, decimal limitPrice, decimal open, decimal range, decimal excepted)
+        {
+            var fillModel = new EquityFillModel();
+            var time = new DateTime(2018, 9, 24, 9, 30, 0);
+            var timeKeeper = new TimeKeeper(time.ConvertToUtc(TimeZones.NewYork), TimeZones.NewYork);
+
+            var order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            var configTradeBar = CreateTradeBarConfig(Symbols.SPY);
+            var configProvider = new MockSubscriptionDataConfigProvider(CreateTickConfig(Symbols.SPY));
+            configProvider.SubscriptionDataConfigs.Add(configTradeBar);
+
+            var parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            var equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var trades = new List<Tick>();
+            var prices = new[] { open, open + range, open - range, open + range / 2 };
+            var tradeBar = new TradeBar(time.AddMinutes(1), equity.Symbol, open, open, open, open, 100);
+            
+            for (var i = 0; i < prices.Length; i++)
+            {
+                trades.Add(new Tick
+                {
+                    TickType = TickType.Trade,
+                    Time = time.AddMilliseconds(i + 100),
+                    Value = prices[i]
+                });
+                tradeBar.UpdateTrade(prices[i], 0);
+            }
+
+            equity.Update(trades, typeof(Tick));
+
+            var fill = fillModel.Fill(parameters).Single();
+            Assert.AreEqual(excepted, fill.FillPrice);
+
+            // TradeBar Play
+            order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            equity.SetMarketPrice(tradeBar);
+
+            fill = fillModel.LimitIfTouchedFill(equity, order);
+            Assert.AreEqual(excepted, fill.FillPrice);
+        }
+
+        [TestCase(100, 291.50, 291.55, 291.4, 0.2, 291.4)]
+        [TestCase(100, 291.50, 291.55, 291.6, 0.2, 291.55)]
+        [TestCase(100, 291.50, 291.55, 291.525, 0.2, 291.55)]
+        [TestCase(100, 291.55, 291.5, 291.4, 0.2, 291.4)]
+        [TestCase(100, 291.55, 291.5, 291.6, 0.2, 291.5)]
+        [TestCase(100, 291.55, 291.5, 291.525, 0.2, 291.5)]
+        public void LimitIfTouchedBullZigZagLowBeforeHigh(decimal orderQuantity, decimal triggerPrice, decimal limitPrice, decimal open, decimal range, decimal excepted)
+        {
+            var fillModel = new EquityFillModel();
+            var time = new DateTime(2018, 9, 24, 9, 30, 0);
+            var timeKeeper = new TimeKeeper(time.ConvertToUtc(TimeZones.NewYork), TimeZones.NewYork);
+
+            var order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            var configTradeBar = CreateTradeBarConfig(Symbols.SPY);
+            var configProvider = new MockSubscriptionDataConfigProvider(CreateTickConfig(Symbols.SPY));
+            configProvider.SubscriptionDataConfigs.Add(configTradeBar);
+
+            var parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            var equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            var trades = new List<Tick>();
+            var prices = new[] { open, open - range, open + range, open + range / 2 };
+            var tradeBar = new TradeBar(time.AddMinutes(1), equity.Symbol, open, open, open, open, 100);
+
+            for (var i = 0; i < prices.Length; i++)
+            {
+                trades.Add(new Tick
+                {
+                    TickType = TickType.Trade,
+                    Time = time.AddMilliseconds(i + 100),
+                    Value = prices[i]
+                });
+                tradeBar.UpdateTrade(prices[i], 0);
+            }
+
+            equity.Update(trades, typeof(Tick));
+
+            var fill = fillModel.Fill(parameters).Single();
+            Assert.AreEqual(excepted, fill.FillPrice);
+
+            // TradeBar Play
+            order = new LimitIfTouchedOrder(Symbols.SPY, orderQuantity, triggerPrice, limitPrice, time.ConvertToUtc(TimeZones.NewYork));
+
+            parameters = new FillModelParameters(CreateEquity(configTradeBar), order,
+                configProvider, Time.OneHour, null);
+
+            equity = parameters.Security;
+            equity.SetLocalTimeKeeper(timeKeeper.GetLocalTimeKeeper(TimeZones.NewYork));
+
+            equity.SetMarketPrice(tradeBar);
+
+            fill = fillModel.LimitIfTouchedFill(equity, order);
+            Assert.AreEqual(excepted, fill.FillPrice);
+        }
+
     }
 }

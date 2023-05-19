@@ -257,7 +257,7 @@ namespace QuantConnect.Data.Consolidators
         /// <summary>
         /// Resets this consolidator to its initial state
         /// </summary>
-        public void Reset()
+        public virtual void Reset()
         {
             _lastEmit = DateTime.MinValue;
             _currentCount = 0;

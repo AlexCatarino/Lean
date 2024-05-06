@@ -142,7 +142,7 @@ namespace QuantConnect.Indicators
 
         internal static decimal DecimalMath(Func<double, double> function, decimal input)
         {
-            return Convert.ToDecimal(function((double)input));
+            return function((double)input).SafeDecimalCast();
         }
     }
 }

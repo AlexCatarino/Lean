@@ -57,14 +57,22 @@ namespace QuantConnect.Indicators
 
         internal static decimal CalculateD1(decimal spotPrice, decimal strikePrice, decimal timeToExpiration, decimal riskFreeRate, decimal dividendYield, decimal volatility)
         {
-            var numerator = DecimalMath(Math.Log, spotPrice / strikePrice) + (riskFreeRate - dividendYield + 0.5m * volatility * volatility) * timeToExpiration;
-            var denominator = volatility * DecimalMath(Math.Sqrt, timeToExpiration);
-            if (denominator == 0m)
+            try
             {
-                // return a random variable large enough to produce normal probability density close to 1
-                return 10;
+                var numerator = DecimalMath(Math.Log, spotPrice / strikePrice) + (riskFreeRate - dividendYield + 0.5m * volatility * volatility) * timeToExpiration;
+                var denominator = volatility * DecimalMath(Math.Sqrt, timeToExpiration);
+                if (denominator == 0m)
+                {
+                    // return a random variable large enough to produce normal probability density close to 1
+                    return 10;
+                }
+                return numerator / denominator;
             }
-            return numerator / denominator;
+            catch(Exception ex) 
+            {
+                var message = $"stopPrice = {spotPrice}, strikePrice = {strikePrice}, timeToExpiration = {timeToExpiration}, riskFreeRate = {riskFreeRate}, dividendYield = {dividendYield}, volatility = {volatility}";
+                throw new Exception(message, ex);
+            }
         }
 
         internal static decimal CalculateD2(decimal d1, decimal volatility, decimal timeToExpiration)

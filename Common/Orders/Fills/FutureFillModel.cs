@@ -14,7 +14,6 @@
 */
 
 using System;
-using QuantConnect.Util;
 using QuantConnect.Data;
 using QuantConnect.Securities;
 using QuantConnect.Orders.Fees;
@@ -107,9 +106,7 @@ namespace QuantConnect.Orders.Fills
             if (order.Status == OrderStatus.Canceled) return fill;
 
             // Fill only if open or extended
-            // even though data from internal configurations are not sent to the algorithm.OnData they still drive security cache and data
-            // this is specially relevant for the continuous contract underlying mapped contracts which are internal configurations
-            if (!IsExchangeOpen(asset, Parameters.ConfigProvider.GetSubscriptionDataConfigs(asset.Symbol, includeInternalConfigs: true).IsExtendedMarketHours()))
+            if (!IsExchangeOpenOrExtended(asset))
             {
                 return fill;
             }
@@ -153,6 +150,94 @@ namespace QuantConnect.Orders.Fills
             }
 
             return fill;
+        }
+
+        /// <summary>
+        /// Default trailing stop fill model implementation in base class security. (Trailing Stop Order Type)
+        /// </summary>
+        /// <param name="asset">Security asset we're filling</param>
+        /// <param name="order">Order packet to model</param>
+        /// <returns>Order fill information detailing the average price and quantity filled.</returns>
+        public override OrderEvent TrailingStopFill(Security asset, TrailingStopOrder order)
+        {
+            // Default order event to return.
+            var utcTime = asset.LocalTime.ConvertToUtc(asset.Exchange.TimeZone);
+            var fill = new OrderEvent(order, utcTime, OrderFee.Zero);
+
+            // If its canceled don't need anymore checks:
+            if (order.Status == OrderStatus.Canceled) return fill;
+
+            // Fill only if open or extended
+            if (!IsExchangeOpenOrExtended(asset))
+            {
+                return fill;
+            }
+
+            // Get the range of prices in the last bar:
+            var prices = GetPricesCheckingPythonWrapper(asset, order.Direction);
+            var pricesEndTime = prices.EndTime.ConvertToUtc(asset.Exchange.TimeZone);
+
+            // Do not fill on stale data
+            if (pricesEndTime <= order.Time) return fill;
+
+            // Calculate the model slippage: e.g. 0.01c
+            var slip = asset.SlippageModel.GetSlippageApproximation(asset, order);
+
+            switch (order.Direction)
+            {
+                case OrderDirection.Sell:
+                    // Fill sell if market price drops below stop price
+                    if (prices.Low <= order.StopPrice)
+                    {
+                        fill.Status = OrderStatus.Filled;
+                        // Assuming worse case scenario fill - fill at lowest of the stop & asset price.
+                        fill.FillPrice = Math.Min(order.StopPrice, prices.Current - slip);
+                        // assume the order completely filled
+                        fill.FillQuantity = order.Quantity;
+                    }
+                    break;
+
+                case OrderDirection.Buy:
+                    // Fill buy if market price rises above stop price
+                    if (prices.High >= order.StopPrice)
+                    {
+                        fill.Status = OrderStatus.Filled;
+                        // Assuming worse case scenario fill - fill at highest of the stop & asset price.
+                        fill.FillPrice = Math.Max(order.StopPrice, prices.Current + slip);
+                        // assume the order completely filled
+                        fill.FillQuantity = order.Quantity;
+                    }
+                    break;
+            }
+
+            // Update the stop price:
+            // NOTE: Doing this after attempting to fill the order in the following cases:
+            //  - Sell: if low < stop price, order is filled. If we were to update the stop price before and it is moved towards the high price
+            //          placing the stop price above the low price, it will not trigger a fill.
+            //  - Buy: if high > stop price, order is filled. If we were to update the stop price before and it is moved towards the low price
+            //         placing the stop price below the high price, it will not trigger a fill.
+            if (fill.Status != OrderStatus.Filled &&
+                TrailingStopOrder.TryUpdateStopPrice(order.Direction == OrderDirection.Sell ? prices.High : prices.Low, order.StopPrice,
+                    order.TrailingAmount, order.TrailingAsPercentage, order.Direction, out var updatedStopPrice))
+            {
+                order.StopPrice = updatedStopPrice;
+                Parameters.OnOrderUpdated(order);
+            }
+
+            return fill;
+        }
+
+        /// <summary>
+        /// Determines if the exchange is open or extended using the current time of the asset
+        /// </summary>
+        /// <param name="asset">Security asset we're filling</param>
+        /// <returns>True if the exchange is open or extended</returns>
+        /// <remarks>Even though data from internal configurations are not sent to the algorithm.OnData they still drive security cache and data.
+        /// This is specially relevant for the continuous contract underlying mapped contracts which are internal configurations</remarks>
+        private bool IsExchangeOpenOrExtended(Security asset)
+        {
+            var isExtendedMarketHours = Parameters.ConfigProvider.GetSubscriptionDataConfigs(asset.Symbol, includeInternalConfigs: true).IsExtendedMarketHours();
+            return IsExchangeOpen(asset, isExtendedMarketHours);
         }
     }
 }

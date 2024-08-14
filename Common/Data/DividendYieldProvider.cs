@@ -198,23 +198,23 @@ namespace QuantConnect.Data
             var dividendYieldProvider = new Dictionary<DateTime, decimal>();
 
             // calculate the dividend rate from each payout
-            var subsequentRate = 0m;
-            foreach (var row in corporateFactors.Where(x => x.Date != Time.EndOfTime).OrderByDescending(corporateFactor => corporateFactor.Date))
+            var rows = corporateFactors.Where(x => x.Date != Time.EndOfTime).OrderByDescending(corporateFactor => corporateFactor.Date).ToArray();
+            for (var i = 1; i < rows.Length; i++)
             {
-                var dividendYield = 1 / row.PriceFactor - 1 - subsequentRate;
-                dividendYieldProvider[row.Date] = dividendYield;
-                subsequentRate = dividendYield;
+                var row = rows[i];
+                var priceFactor = row.PriceFactor / rows[i - 1].PriceFactor;
+                dividendYieldProvider[row.Date] = 1 / priceFactor - 1;
             }
 
             // cumulative sum by year, since we'll use yearly payouts for estimation
-            var yearlyDividendYieldProvider = new Dictionary<DateTime, decimal>();
-            foreach (var date in dividendYieldProvider.Keys.OrderBy(x => x))
-            {
-                // 15 days window from 1y to avoid overestimation from last year value
-                var yearlyDividend = dividendYieldProvider.Where(kvp => kvp.Key <= date && kvp.Key > date.AddDays(-350)).Sum(kvp => kvp.Value);
-                // discrete to continuous: LN(1 + i)
-                yearlyDividendYieldProvider[date] = Convert.ToDecimal(Math.Log(1d + (double)yearlyDividend));
-            }
+            var yearlyDividendYieldProvider = dividendYieldProvider.Keys.OrderBy(x => x)
+                .ToDictionary(date => date, date =>
+                {
+                    // 15 days window from 1y to avoid overestimation from last year value
+                    var yearlyDividend = dividendYieldProvider.Where(kvp => kvp.Key <= date && kvp.Key > date.AddDays(-350)).Sum(kvp => kvp.Value);
+                    // discrete to continuous: LN(1 + i)
+                    return Convert.ToDecimal(Math.Log(1d + (double)yearlyDividend));
+                });
 
             if (yearlyDividendYieldProvider.Count == 0)
             {

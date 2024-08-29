@@ -19,12 +19,16 @@ namespace QuantConnect.Research
 {
     public class Report
     {
+        private int _projectId;
+        private string _backtestId;
         private readonly QuantBook _quantBook;
 
         public Report(QuantBook quantBook)
         { 
             _quantBook = quantBook;
         }
+
+        
 
         public PyObject GetSectorAnalysis()
         {

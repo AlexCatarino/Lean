@@ -57,7 +57,8 @@ namespace QuantConnect.Tests
                 parameters.Algorithm,
                 parameters.Statistics,
                 parameters.Language,
-                parameters.ExpectedFinalStatus
+                parameters.ExpectedFinalStatus,
+                algorithmLocation: parameters.AlgorithmLocation
             ).AlgorithmManager;
 
             if (parameters.Algorithm == "TrainingOnDataRegressionAlgorithm")
@@ -124,6 +125,7 @@ namespace QuantConnect.Tests
             public AlgorithmStatus ExpectedFinalStatus { get; init; }
             public long DataPoints { get; init; }
             public int AlgorithmHistoryDataPoints { get; init; }
+            public string AlgorithmLocation { get; set; }
 
             public AlgorithmStatisticsTestParameters(
                 string algorithm,

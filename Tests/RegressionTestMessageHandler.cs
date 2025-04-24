@@ -29,6 +29,8 @@ namespace QuantConnect.Tests
     public class RegressionTestMessageHandler : QuantConnect.Messaging.Messaging
     {
         private static readonly bool _updateRegressionStatistics = Config.GetBool("regression-update-statistics", false);
+        private static readonly string _folder = Config.Get("regression-update-statistics-folder", "../../../Algorithm.CSharp");
+
         private AlgorithmNodePacket _job;
         private AlgorithmManager _algorithmManager;
 
@@ -64,7 +66,7 @@ namespace QuantConnect.Tests
                     {
                         if (_updateRegressionStatistics && _job.Language == Language.CSharp)
                         {
-                            UpdateRegressionStatisticsInSourceFile(result.Results.Statistics, _algorithmManager, "../../../Algorithm.CSharp", $"{_job.AlgorithmId}.cs");
+                            UpdateRegressionStatisticsInSourceFile(result.Results.Statistics, _algorithmManager, $"{_job.AlgorithmId}.cs");
                         }
                     }
                     break;
@@ -74,9 +76,9 @@ namespace QuantConnect.Tests
             }
         }
 
-        public static void UpdateRegressionStatisticsInSourceFile(IDictionary<string, string> statistics, AlgorithmManager algorithmManager, string folder, string fileToUpdate)
+        public static void UpdateRegressionStatisticsInSourceFile(IDictionary<string, string> statistics, AlgorithmManager algorithmManager, string fileToUpdate)
         {
-            var algorithmSource = Directory.EnumerateFiles(folder, fileToUpdate, SearchOption.AllDirectories).Single();
+            var algorithmSource = Directory.EnumerateFiles(_folder, fileToUpdate, SearchOption.AllDirectories).Single();
             var file = File.ReadAllLines(algorithmSource).ToList().GetEnumerator();
             var lines = new List<string>();
             while (file.MoveNext())

@@ -31,7 +31,9 @@ jobs:
 
       - name: Compute additional stubs repos
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # QC_GIT_TOKEN is needed (not the default GITHUB_TOKEN) so gh can list
+          # private QuantConnect/Lean.DataSource.* repos too.
+          GH_TOKEN: ${{ secrets.QC_GIT_TOKEN }}
           ADDITIONAL_STUBS_REPOS: ${{ secrets.ADDITIONAL_STUBS_REPOS }}
         run: |
           REPOS=$(python find_datasource_repos.py)

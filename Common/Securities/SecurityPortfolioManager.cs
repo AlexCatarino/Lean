@@ -616,10 +616,17 @@ namespace QuantConnect.Securities
 
         /// <summary>
         /// Sets the account currency cash symbol this algorithm is to manage, as well
-        /// as the starting cash in this currency if given
+        /// as the starting cash in this currency if given.
         /// </summary>
-        /// <remarks>Has to be called before calling <see cref="SetCash(decimal)"/>
-        /// or adding any <see cref="Security"/></remarks>
+        /// <remarks>
+        /// Should be called before adding any <see cref="Security"/>.
+        /// If <see cref="SetCash(decimal)"/> was called beforehand, the previous cash entry
+        /// is preserved in the <see cref="CashBook"/>: the algorithm continues to hold that
+        /// amount in the previous currency, while <see cref="_baseCurrencyCash"/> is
+        /// repointed to the new account currency. When the new account currency matches the
+        /// existing one, the optional <paramref name="startingCash"/> simply overrides the
+        /// previously set amount.
+        /// </remarks>
         /// <param name="accountCurrency">The account currency cash symbol to set</param>
         /// <param name="startingCash">The account currency starting cash to set</param>
         public void SetAccountCurrency(string accountCurrency, decimal? startingCash = null)
@@ -645,24 +652,40 @@ namespace QuantConnect.Securities
                     Messages.SecurityPortfolioManager.CannotChangeAccountCurrencyAfterAddingSecurity);
             }
 
-            if (_setCashWasCalled)
-            {
-                throw new InvalidOperationException("SecurityPortfolioManager.SetAccountCurrency(): " +
-                    Messages.SecurityPortfolioManager.CannotChangeAccountCurrencyAfterSettingCash);
-            }
-
-            Log.Trace("SecurityPortfolioManager.SetAccountCurrency(): " +
-                Messages.SecurityPortfolioManager.SettingAccountCurrency(accountCurrency));
+            // Capture the previous base cash and amount if SetCash() was called earlier so we can
+            // either report the leftover balance in the old currency or detect a same-currency override.
+            var previousCash = _setCashWasCalled ? _baseCurrencyCash : null;
+            var previousAmount = previousCash?.Amount;
+            var message = Messages.SecurityPortfolioManager.SettingAccountCurrency(accountCurrency);
 
             UnsettledCashBook.AccountCurrency = accountCurrency;
             CashBook.AccountCurrency = accountCurrency;
 
+            // Repoint the base cash to the new account currency entry.
             _baseCurrencyCash = CashBook[accountCurrency];
+
+            if (previousCash != null && previousCash.Symbol != accountCurrency)
+            {
+                // The CashBook.AccountCurrency setter migrates the previous amount onto the new
+                // currency entry and removes the old one. Undo that migration so the previous
+                // balance is kept in its own currency, and the new account currency starts at zero
+                // (a subsequent SetCash below will apply startingCash if provided).
+                _baseCurrencyCash.SetAmount(0);
+                CashBook.Add(previousCash.Symbol, previousAmount.Value, previousCash.ConversionRate);
+                message += ". " + Messages.SecurityPortfolioManager.AccountCurrencyChangedAfterSettingCash(previousCash);
+            }
 
             if (startingCash != null)
             {
-                SetCash((decimal)startingCash);
+                SetCash(startingCash.Value);
+                // When the account currency is unchanged, report the override of the prior amount.
+                if (previousCash?.Symbol == accountCurrency && previousAmount != startingCash)
+                {
+                    message = Messages.SecurityPortfolioManager.AccountCurrencyCashUpdated(accountCurrency, previousAmount.Value, startingCash.Value);
+                }
             }
+
+            Log.Trace("SecurityPortfolioManager.SetAccountCurrency(): " + message);
         }
 
         /// <summary>

@@ -619,13 +619,10 @@ namespace QuantConnect.Securities
         /// as the starting cash in this currency if given.
         /// </summary>
         /// <remarks>
-        /// Should be called before adding any <see cref="Security"/>.
-        /// If <see cref="SetCash(decimal)"/> was called beforehand, the previous cash entry
-        /// is preserved in the <see cref="CashBook"/>: the algorithm continues to hold that
-        /// amount in the previous currency, while <see cref="_baseCurrencyCash"/> is
-        /// repointed to the new account currency. When the new account currency matches the
-        /// existing one, the optional <paramref name="startingCash"/> simply overrides the
-        /// previously set amount.
+        /// Should be called before adding any <see cref="Security"/>. If <see cref="SetCash(decimal)"/>
+        /// was called beforehand with a different currency, the previous cash entry is kept in the
+        /// <see cref="CashBook"/> and the base currency <see cref="Cash"/> is repointed to the new currency.
+        /// If the currency matches, <paramref name="startingCash"/> overrides the previous amount.
         /// </remarks>
         /// <param name="accountCurrency">The account currency cash symbol to set</param>
         /// <param name="startingCash">The account currency starting cash to set</param>

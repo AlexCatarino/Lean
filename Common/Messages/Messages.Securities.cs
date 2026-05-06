@@ -890,13 +890,6 @@ namespace QuantConnect
                 "Cannot change AccountCurrency after adding a Security. Please move SetAccountCurrency() before AddSecurity().";
 
             /// <summary>
-            /// Returns a string message saying the AccountCurrency cannot be changed after setting cash and that the method
-            /// SetAccountCurrency() should be moved before SetCash()
-            /// </summary>
-            public static string CannotChangeAccountCurrencyAfterSettingCash =
-                "Cannot change AccountCurrency after setting cash. Please move SetAccountCurrency() before SetCash().";
-
-            /// <summary>
             /// Returns a string message saying the AccountCurrency has been changed after setting cash, reporting the
             /// remaining amount held in the previous account currency
             /// </summary>

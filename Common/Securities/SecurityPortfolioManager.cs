@@ -36,6 +36,7 @@ namespace QuantConnect.Securities
     {
         private Cash _baseCurrencyCash;
         private bool _setCashWasCalled;
+        private bool _baseCashSymbolSetExplicitly;
         private decimal _totalPortfolioValue;
         private bool _isTotalPortfolioValueValid;
         private object _totalPortfolioValueLock = new();
@@ -619,10 +620,11 @@ namespace QuantConnect.Securities
         /// as the starting cash in this currency if given.
         /// </summary>
         /// <remarks>
-        /// Should be called before adding any <see cref="Security"/>. If <see cref="SetCash(decimal)"/>
-        /// was called beforehand with a different currency, the previous cash entry is kept in the
-        /// <see cref="CashBook"/> and the base currency <see cref="Cash"/> is repointed to the new currency.
-        /// If the currency matches, <paramref name="startingCash"/> overrides the previous amount.
+        /// Should be called before adding any <see cref="Security"/>. If <see cref="SetCash(string, decimal, decimal)"/>
+        /// was called beforehand for the current account currency, that balance is kept in its own
+        /// <see cref="CashBook"/> entry and the new account currency starts at zero. Otherwise the
+        /// previously set amount carries over to the new account currency. If the currency matches,
+        /// <paramref name="startingCash"/> overrides the previous amount.
         /// </remarks>
         /// <param name="accountCurrency">The account currency cash symbol to set</param>
         /// <param name="startingCash">The account currency starting cash to set</param>
@@ -661,10 +663,11 @@ namespace QuantConnect.Securities
             // Repoint the base cash to the new account currency entry.
             _baseCurrencyCash = CashBook[accountCurrency];
 
-            if (previousCash != null && previousCash.Symbol != accountCurrency)
+            if (_baseCashSymbolSetExplicitly && previousCash != null && previousCash.Symbol != accountCurrency)
             {
-                // Keep the previous balance in its own currency entry; the new account currency
-                // starts at zero (a subsequent SetCash below will apply startingCash if provided).
+                // The user committed cash to a specific currency via SetCash(symbol, ...): keep that
+                // balance in its own entry and start the new account currency at zero. Otherwise the
+                // CashBook setter has already migrated the implicit amount to the new currency entry.
                 _baseCurrencyCash.SetAmount(0);
                 CashBook.Add(previousCash.Symbol, previousAmount.Value, previousCash.ConversionRate);
                 message += ". " + Messages.SecurityPortfolioManager.AccountCurrencyChangedAfterSettingCash(previousCash);
@@ -690,6 +693,7 @@ namespace QuantConnect.Securities
         public void SetCash(decimal cash)
         {
             _setCashWasCalled = true;
+            _baseCashSymbolSetExplicitly = false;
             _baseCurrencyCash.SetAmount(cash);
         }
 
@@ -706,6 +710,10 @@ namespace QuantConnect.Securities
             symbol = symbol.LazyToUpper();
             if (CashBook.TryGetValue(symbol, out item))
             {
+                if (symbol == _baseCurrencyCash.Symbol)
+                {
+                    _baseCashSymbolSetExplicitly = true;
+                }
                 item.SetAmount(cash);
                 item.ConversionRate = conversionRate;
             }

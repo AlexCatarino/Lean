@@ -621,7 +621,7 @@ namespace QuantConnect.Securities
         /// </summary>
         /// <remarks>
         /// Should be called before adding any <see cref="Security"/>. If <see cref="SetCash(string, decimal, decimal)"/>
-        /// was called beforehand for the current account currency, that balance is kept in its own
+        /// was called beforehand, the previous base cash balance is kept in its own
         /// <see cref="CashBook"/> entry and the new account currency starts at zero. Otherwise the
         /// previously set amount carries over to the new account currency. If the currency matches,
         /// <paramref name="startingCash"/> overrides the previous amount.
@@ -706,14 +706,10 @@ namespace QuantConnect.Securities
         public void SetCash(string symbol, decimal cash, decimal conversionRate)
         {
             _setCashWasCalled = true;
-            Cash item;
+            _baseCashSymbolSetExplicitly = true;
             symbol = symbol.LazyToUpper();
-            if (CashBook.TryGetValue(symbol, out item))
+            if (CashBook.TryGetValue(symbol, out var item))
             {
-                if (symbol == _baseCurrencyCash.Symbol)
-                {
-                    _baseCashSymbolSetExplicitly = true;
-                }
                 item.SetAmount(cash);
                 item.ConversionRate = conversionRate;
             }

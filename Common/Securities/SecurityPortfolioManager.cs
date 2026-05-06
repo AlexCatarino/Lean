@@ -663,10 +663,8 @@ namespace QuantConnect.Securities
 
             if (previousCash != null && previousCash.Symbol != accountCurrency)
             {
-                // The CashBook.AccountCurrency setter migrates the previous amount onto the new
-                // currency entry and removes the old one. Undo that migration so the previous
-                // balance is kept in its own currency, and the new account currency starts at zero
-                // (a subsequent SetCash below will apply startingCash if provided).
+                // Keep the previous balance in its own currency entry; the new account currency
+                // starts at zero (a subsequent SetCash below will apply startingCash if provided).
                 _baseCurrencyCash.SetAmount(0);
                 CashBook.Add(previousCash.Symbol, previousAmount.Value, previousCash.ConversionRate);
                 message += ". " + Messages.SecurityPortfolioManager.AccountCurrencyChangedAfterSettingCash(previousCash);

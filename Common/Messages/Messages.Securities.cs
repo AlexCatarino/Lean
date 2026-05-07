@@ -890,11 +890,23 @@ namespace QuantConnect
                 "Cannot change AccountCurrency after adding a Security. Please move SetAccountCurrency() before AddSecurity().";
 
             /// <summary>
-            /// Returns a string message saying the AccountCurrency cannot be changed after setting cash and that the method
-            /// SetAccountCurrency() should be moved before SetCash()
+            /// Returns a string message saying the AccountCurrency has been changed after setting cash, reporting the
+            /// remaining amount held in the previous account currency
             /// </summary>
-            public static string CannotChangeAccountCurrencyAfterSettingCash =
-                "Cannot change AccountCurrency after setting cash. Please move SetAccountCurrency() before SetCash().";
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static string AccountCurrencyChangedAfterSettingCash(Securities.Cash previousCash)
+            {
+                return Invariant($"Account currency was changed after SetCash() was called. Algorithm still holds {previousCash.Amount} {previousCash.Symbol} in the previous account currency.");
+            }
+
+            /// <summary>
+            /// Returns a string message saying the account currency starting cash has been updated from a previous amount to a new one
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static string AccountCurrencyCashUpdated(string accountCurrency, decimal previousAmount, decimal newAmount)
+            {
+                return Invariant($"Account currency cash updated to {newAmount} {accountCurrency} from {previousAmount} {accountCurrency}.");
+            }
 
             /// <summary>
             /// Returns a string message saying the AccountCurrency has already been set and that the new value for this property

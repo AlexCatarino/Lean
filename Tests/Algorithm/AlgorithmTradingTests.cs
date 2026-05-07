@@ -1652,6 +1652,36 @@ namespace QuantConnect.Tests.Algorithm
         }
 
         [Test]
+        public void SetHoldingsOnCanonicalFutureSymbolTradesMappedContract()
+        {
+            var algo = GetAlgorithm(out _, 1, 0);
+
+            var continuousFuture = algo.AddFuture(Futures.Indices.SP500EMini, Resolution.Minute, extendedMarketHours: true);
+            var contract = algo.AddFutureContract(
+                QuantConnect.Symbol.CreateFuture(Futures.Indices.SP500EMini, Market.CME, new DateTime(2020, 3, 20)),
+                Resolution.Minute,
+                extendedMarketHours: true);
+
+            ((IContinuousSecurity)continuousFuture).Mapped = contract.Symbol;
+
+            // Use distinct prices so the buying-power math demonstrates the mapped contract's price was used
+            Update(continuousFuture, 5);
+            Update(contract, 25);
+            algo.Portfolio.SetCash(150000);
+            algo.SetDateTime(new DateTime(2013, 10, 7, 17, 0, 0));
+
+            var tickets = algo.SetHoldings(continuousFuture.Symbol, 0.5m);
+
+            Assert.AreEqual(1, tickets.Count);
+            Assert.AreEqual(OrderStatus.New, tickets[0].Status);
+            Assert.AreEqual(contract.Symbol, tickets[0].Symbol);
+
+            // Quantity is sized off the mapped contract's $25 price, not the canonical's $5 price
+            var expectedQuantity = PortfolioTarget.Percent(algo, contract.Symbol, 0.5m).Quantity;
+            Assert.AreEqual(expectedQuantity, tickets[0].Quantity);
+        }
+
+        [Test]
         public void MarketOnOpenOrdersNotSupportedForFutures()
         {
             var algo = GetAlgorithm(out _, 1, 0);

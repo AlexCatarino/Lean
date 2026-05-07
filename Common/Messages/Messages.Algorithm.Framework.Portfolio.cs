@@ -64,6 +64,15 @@ namespace QuantConnect
             }
 
             /// <summary>
+            /// Returns a string message saying the given continuous symbol has no mapped contract to trade
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static string ContinuousSymbolNotMapped(QuantConnect.Symbol symbol)
+            {
+                return Invariant($"The continuous contract {symbol} has no currently mapped contract to trade. Wait until a contract is mapped before targeting this symbol.");
+            }
+
+            /// <summary>
             /// Parses the given portfolio target into a string message containing basic information about it
             /// </summary>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

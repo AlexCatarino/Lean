@@ -60,7 +60,8 @@ class BasicTemplateContinuousFutureWithExtendedMarketAlgorithm(QCAlgorithm):
 
             current_position_size = self._current_contract.holdings.quantity
             self.liquidate(self._current_contract.symbol)
-            self.buy(self._continuous_contract.mapped, current_position_size)
+            # Passing the canonical symbol routes the order to the currently mapped contract
+            self.buy(self._continuous_contract.symbol, current_position_size)
             self._current_contract = self.securities[self._continuous_contract.mapped]
 
     def on_order_event(self, order_event):

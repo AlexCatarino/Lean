@@ -1214,10 +1214,16 @@ namespace QuantConnect.Algorithm
         private Security GetSecurityForOrder(Symbol symbol)
         {
             var isCanonical = symbol.IsCanonical();
-            if (Securities.TryGetValue(symbol, out var security) && 
+            if (Securities.TryGetValue(symbol, out var security) &&
                 // Let canonical and delisted securities through instead of throwing. An invalid ticket will be returned later on when trying to submit the order.
                 (isCanonical || security.IsTradable || security.IsDelisted))
             {
+                // For a continuous (canonical) security, route the order to the currently mapped contract so it's tradable.
+                if (isCanonical && security is IContinuousSecurity { Mapped: not null } continuousSecurity &&
+                    Securities.TryGetValue(continuousSecurity.Mapped, out var mappedSecurity))
+                {
+                    return mappedSecurity;
+                }
                 return security;
             }
 

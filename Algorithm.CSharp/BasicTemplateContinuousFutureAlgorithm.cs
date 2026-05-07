@@ -89,7 +89,8 @@ namespace QuantConnect.Algorithm.CSharp
 
                 var currentPositionSize = _currentContract.Holdings.Quantity;
                 Liquidate(_currentContract.Symbol);
-                Buy(_continuousContract.Mapped, currentPositionSize);
+                // Passing the canonical Symbol routes the order to the currently mapped contract
+                Buy(_continuousContract.Symbol, currentPositionSize);
                 _currentContract = Securities[_continuousContract.Mapped];
             }
         }

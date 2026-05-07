@@ -80,13 +80,14 @@ namespace QuantConnect.Algorithm.CSharp
                 }
 
                 var emaCurrentValue = symbolData.EMA.Current.Value;
+                // Passing the canonical Symbol routes the order to the currently mapped contract
                 if (emaCurrentValue < symbolData.Price && !symbolData.IsLong)
                 {
-                    MarketOrder(symbolData.Mapped, 1);
+                    MarketOrder(symbolData.Symbol, 1);
                 }
                 else if (emaCurrentValue > symbolData.Price && !symbolData.IsShort)
                 {
-                    MarketOrder(symbolData.Mapped, -1);
+                    MarketOrder(symbolData.Symbol, -1);
                 }
             }
         }

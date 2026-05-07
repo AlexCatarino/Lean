@@ -59,10 +59,11 @@ class BasicTemplateFutureRolloverAlgorithm(QCAlgorithm):
                 return
             
             ema_current_value = symbol_data.EMA.current.value
+            # Passing the canonical symbol routes the order to the currently mapped contract
             if ema_current_value < symbol_data.price and not symbol_data.is_long:
-                self.market_order(symbol_data.mapped, 1)
+                self.market_order(symbol_data.symbol, 1)
             elif ema_current_value > symbol_data.price and not symbol_data.is_short:
-                self.market_order(symbol_data.mapped, -1)
+                self.market_order(symbol_data.symbol, -1)
     
 ### <summary>
 ### Abstracted class object to hold information (state, indicators, methods, etc.) from a Symbol/Security in a multi-security algorithm

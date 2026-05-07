@@ -1610,6 +1610,48 @@ namespace QuantConnect.Tests.Algorithm
         }
 
         [Test]
+        public void OrdersOnCanonicalFutureSymbolAreRoutedToMappedContract()
+        {
+            var algo = GetAlgorithm(out _, 1, 0);
+
+            var continuousFuture = algo.AddFuture(Futures.Indices.SP500EMini, Resolution.Minute, extendedMarketHours: true);
+            var contract = algo.AddFutureContract(
+                QuantConnect.Symbol.CreateFuture(Futures.Indices.SP500EMini, Market.CME, new DateTime(2020, 3, 20)),
+                Resolution.Minute,
+                extendedMarketHours: true);
+
+            // Simulate the universe selecting the front-month contract for the continuous future
+            ((IContinuousSecurity)continuousFuture).Mapped = contract.Symbol;
+
+            Update(continuousFuture, 25);
+            Update(contract, 25);
+            algo.Portfolio.SetCash(150000);
+            algo.SetDateTime(new DateTime(2013, 10, 7, 12, 0, 0));
+
+            var ticket = algo.MarketOrder(continuousFuture.Symbol, 1);
+
+            Assert.AreEqual(OrderStatus.New, ticket.Status);
+            Assert.AreEqual(contract.Symbol, ticket.Symbol);
+        }
+
+        [Test]
+        public void OrdersOnCanonicalFutureSymbolAreRejectedWhenNoMappedContract()
+        {
+            var algo = GetAlgorithm(out _, 1, 0);
+
+            var continuousFuture = algo.AddFuture(Futures.Indices.SP500EMini, Resolution.Minute, extendedMarketHours: true);
+            Update(continuousFuture, 25);
+            algo.Portfolio.SetCash(150000);
+            algo.SetDateTime(new DateTime(2013, 10, 7, 12, 0, 0));
+
+            // Mapped is not set so the order falls back to the (non-tradable) canonical security and is rejected
+            var ticket = algo.MarketOrder(continuousFuture.Symbol, 1);
+
+            Assert.AreEqual(OrderStatus.Invalid, ticket.Status);
+            Assert.AreEqual(OrderResponseErrorCode.NonTradableSecurity, ticket.SubmitRequest.Response.ErrorCode);
+        }
+
+        [Test]
         public void MarketOnOpenOrdersNotSupportedForFutures()
         {
             var algo = GetAlgorithm(out _, 1, 0);
